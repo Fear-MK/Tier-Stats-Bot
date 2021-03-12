@@ -193,7 +193,7 @@ def calc_tier_stats(name, tier, type):
 def calc_format_stats(name, format, type):
     data =  calc_stats(name, lambda e: e['type'] == format, type)
 
-    if (format == 'FFA'):
+    if (format == 'FFA' and data != None):
         del data["Partner Average"]
         del data["Partner Average (Last 10)"]
 
