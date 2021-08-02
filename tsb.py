@@ -9,7 +9,7 @@ from discord.ext import commands, tasks
 
 import stats
 from common import *
-from secret import key
+from secret import bot_key
 
 bot = commands.Bot(command_prefix=('!', '^'), case_insensitive=True)
 
@@ -22,8 +22,8 @@ async def update_data():
         for i in range(4):
             print("Loading data attempt ", i)
             try:
-                await stats.fetch_events_data(type=type)
-                stats.load_events_data(type=type)
+                await stats.fetch_events_data(type)
+                stats.load_events_data(type)
 
                 print("Data load successful")
                 return
@@ -40,7 +40,7 @@ async def check_db():
     except:
         tb = traceback.format_exc()
         print(tb)
-        if "malformed" in tb:
+        if "malformed" in tb.lower():
             print("DB corrupted!")
             reset_db()
 
@@ -56,8 +56,8 @@ def reset_db():
     stats.con = sqlite3.connect("main.db")
     stats.con.row_factory = sqlite3.Row
 
-    stats.load_events_data(type="rt")
-    stats.load_events_data(type="ct")
+    stats.load_events_data("rt")
+    stats.load_events_data("ct")
 
 
 # Checks that the memory is within limits
@@ -65,7 +65,7 @@ def reset_db():
 async def print_memory():
     process = psutil.Process(os.getpid())
     mb = process.memory_info().rss / (1024 * 1024)
-    print(str(mb) + "MB used")  # in bytes
+    print(f"{str(mb)}MB used")  # in bytes
     if mb > 100:
         print("Restarting!")
         os.execv(sys.executable, ['python'] + sys.argv)
@@ -74,8 +74,8 @@ async def print_memory():
 @bot.event
 async def on_ready():
     try:
-        stats.load_events_data(type='rt')
-        stats.load_events_data(type='ct')
+        stats.load_events_data('rt')
+        stats.load_events_data('ct')
     except:
         pass
     print(f'We have logged in as {bot.user}')
@@ -92,7 +92,7 @@ async def send_messages(ctx, *args):
 @bot.command(aliases=['ts'])
 async def tierstats(ctx, *args):
     usage = 'Usage: `!ts <RT/CT> <tier> (player name)` \nExample: `!ts rt 1`'
-    if (len(args) < 2):
+    if len(args) < 2:
         await send_messages(ctx, usage)
         return
 
@@ -183,7 +183,7 @@ async def partneravg(ctx, *args):
 
     formatted_name = format_name(name)
     data = stats.calc_partner_avg(formatted_name, type)
-    if (data == None):
+    if data is None:
         await send_messages(ctx, "The selected player couldn't be found", usage)
     else:
         author = f'Lounge {type.upper()} Partner Average'
@@ -246,4 +246,4 @@ async def on_command_error(ctx, error):
     raise error
 
 # Define variable key in secret.py
-bot.run(key)
+bot.run(bot_key)
