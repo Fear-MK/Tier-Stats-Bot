@@ -1,19 +1,8 @@
-import aiohttp
-
-async def fetch(url, headers=None):
-    async with aiohttp.ClientSession() as session:
-        if headers == None:
-            async with session.get(url) as response:
-                return await response.read()
-        else:
-            async with session.get(url, headers=headers) as response:
-                return await response.read()
-
 # "bAD W olf" -> "badwolf"
-def format_name(name):
+def format_name(name: str):
     return ''.join(name.split()).lower()
 
-rt_tier_map = {
+RT_TIER_MAP = {
     't1': "Tier 1",
     't2': "Tier 2",
     't3': "Tier 3",
@@ -41,7 +30,7 @@ rt_tier_map = {
     'tiertop50': "Top 50"
 }
 
-ct_tier_map = {
+CT_TIER_MAP = {
     't1': "Tier 1",
     't2': "Tier 2",
     't3': "Tier 3",
@@ -64,4 +53,17 @@ ct_tier_map = {
     'tier6': "Tier 6",
     'tier50': "Top 50",
     'tiertop50': "Top 50"
+}
+
+EVENT_FORMAT_MAP = {
+    "1": "FFA",
+    "2": "2v2",
+    "3": "3v3",
+    "4": "4v4",
+    "6": "6v6",
+    "ffa": "FFA",
+    "2v2": "2v2",
+    "3v3": "3v3",
+    "4v4": "4v4",
+    "6v6": "6v6",
 }

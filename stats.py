@@ -1,89 +1,125 @@
-from collections import defaultdict
-import csv
-import aiohttp
 import asyncio
-import sys
+import csv
+import os
+import sqlite3
+import subprocess
 
 from common import *
-
-rt_data_url = 'https://www.mariokartboards.com/lounge/csv/events_rt.csv'
-ct_data_url = 'https://www.mariokartboards.com/lounge/csv/events_ct.csv'
-
-# player name -> list of events
-rt_events_by_name = defaultdict(list)
-
-# war id -> list of events
-rt_events_by_war_id = defaultdict(list)
-
-ct_events_by_name = defaultdict(list)
-ct_events_by_war_id = defaultdict(list)
 
 # badwolf -> Bad Wolf
 player_name_map = {}
 
+con = sqlite3.connect("main.db")
+con.row_factory = sqlite3.Row
+
 # Fetch csv and save to file
 async def fetch_events_data(type = 'rt'):
-    data_url = rt_data_url if type == 'rt' else ct_data_url
-    out_file = 'events_{}.csv'.format(type)
+    data_url = f'https://www.mariokartboards.com/lounge/csv/events_{type}.csv'
+    out_csv = f'events_{type}.csv'
 
-    for i in range(5):
-        try:
-            events = await fetch(data_url)
-            with open(out_file, "wb") as f:
-                f.write(events)
-            return
-        except:
-            print("Failed to fetch data: " + str(sys.exc_info()[0]))
-        if i < 4:
-            await asyncio.sleep(5)
+    print("Calling wget")
+    subprocess.Popen(f"timeout -s KILL 120 wget -nv -O {'temp.csv'} {data_url}", shell=True)
+    await asyncio.sleep(125)
+
+    if not os.path.exists("temp.csv"):
+        raise FileNotFoundError()
+
+    if os.path.exists(out_csv):
+        if os.stat('temp.csv').st_size < os.stat(out_csv).st_size:
+            os.system("rm temp.csv")
+            raise FileNotFoundError()
+
+    os.system(f"mv temp.csv {out_csv}")
+    os.system("rm temp.csv")
+    os.system("rm wget-log.*")
+
+    print("Done sleeping")
 
 # Load data from csv
 def load_events_data(type = 'rt'):
-    with open('events_{}.csv'.format(type)) as csvfile:
-        events_by_name = defaultdict(list)
-        events_by_war_id = defaultdict(list)
+    with open(f'events_{type}.csv') as csv_file:
+        cur = con.cursor()
 
-        reader = csv.reader(csvfile, delimiter=',')
+        reader = csv.reader(csv_file, delimiter=',')
         header = next(reader)
+
+        cols = header[0:16] + ['scaled_score']
+
+        cur.execute(f"DROP TABLE IF EXISTS {type};")
+
+        create_sql = f"""
+        CREATE TABLE {type} (
+            name integer,
+            team integer,
+            rank integer,
+            player integer,
+            change_mmr integer,
+            multiplier integer,
+            races integer,
+            score integer,
+            subbed integer,
+            subbee integer,
+            current_mmr integer,
+            updated_mmr integer,
+            warid integer,
+            type text,
+            tier text,
+            pid integer,
+            scaled_score double
+        );
+        """
+
+        cur.execute(create_sql)
+        cur.execute(f"CREATE INDEX warid_{type} ON {type}(warid)")
+        cur.execute(f"CREATE INDEX name_{type} ON {type}(name)")
 
         for r in reader:
             event = dict(zip(header, r))
 
-            if (event['type'] == 'Penalty' or event['type'] == 'Reward'):
+            if event['type'] == 'Penalty' or event['type'] == 'Reward':
                 continue
 
             formatted_name = format_name(event['name'])
             player_name_map[formatted_name] = event['name']
 
+            event['name']=formatted_name
             event['score'] = int(event['score'])
             event['races'] = int(event['races'])
 
-            if (event['races'] <= 0):
+            if event['races'] <= 0:
                 continue
 
             event['change_mmr'] = int(event['change_mmr'])
             event['scaled_score'] = (event['score']/event['races'])*12
             event['warid'] = int(event['warid'])
 
-            events_by_name[formatted_name].append(event)
-            events_by_war_id[event['warid']].append(event)
+            values = [event[i] for i in cols]
 
+            cur.execute(f"INSERT INTO {type} VALUES ({', '.join(['?'] * len(values))});", values)
 
-        global rt_events_by_name, rt_events_by_war_id, ct_events_by_name, ct_events_by_war_id
-        if (type == 'rt'):
-            rt_events_by_name = events_by_name
-            rt_events_by_war_id = events_by_war_id
-        else:
-            ct_events_by_name = events_by_name
-            ct_events_by_war_id = events_by_war_id
+        con.commit()
+
+def fetch_sql(query):
+    cur = con.cursor()
+    cur.execute(query)
+    return cur.fetchall()
+
+def get_num_events(type):
+    try:
+        return fetch_sql(f"SELECT count(*) as count from {type}")[0]['count']
+    except:
+        return 0
+
+def get_events_by_war_id(warid, type):
+    return fetch_sql(f"SELECT * from {type} WHERE warid={warid};")
+
+def get_events_by_name(name, type):
+    return fetch_sql(f"SELECT * from {type} WHERE name=\"{name}\";")
 
 # Get partner score for one event
 def get_partner_score(event, type):
     scores = []
-    if (type == 'rt'):
-        events = rt_events_by_war_id[event['warid']]
-    else:
-        events = ct_events_by_war_id[event['warid']]
+    events = get_events_by_war_id(event['warid'], type)
 
     races = 0
     for partner in events:
@@ -100,30 +136,27 @@ def get_partner_score(event, type):
 def get_avg_partner_score(player_events, type):
     partner_scores = []
     for event in player_events:
-        score = get_partner_score(event, type);
-        if score != None:
+        score = get_partner_score(event, type)
+        if score is not None:
             partner_scores.append(score)
 
     avg_partner_score = None
 
-    if(len(partner_scores) != 0):
+    if len(partner_scores) != 0:
         avg_partner_score = sum(partner_scores)/len(partner_scores)
 
     return avg_partner_score
 
 def calc_stats(name, filter_func, type):
-    if (name not in rt_events_by_name and name not in ct_events_by_name):
-        return None
+    player_events = get_events_by_name(name, type)
 
-    if (type == 'rt'):
-        player_events = rt_events_by_name[name]
-    else:
-        player_events = ct_events_by_name[name]
+    if len(player_events) == 0:
+        return None
 
     total_events_played = len(player_events)
     player_events = list(filter(filter_func, player_events))
 
-    if (len(player_events) == 0):
+    if len(player_events) == 0:
         return {}
 
     sorted_player_events = sorted(player_events, key=lambda e: e['warid'], reverse=True)
@@ -141,26 +174,26 @@ def calc_stats(name, filter_func, type):
     win_percentage = wins/len(player_events)
     win_percentage_ten = wins_ten/len(player_events_ten)
 
-    scaled_scores = list(map(lambda e: e['scaled_score'], player_events))
+    scaled_scores = [e['scaled_score'] for e in player_events]
     avg_score = sum(scaled_scores)/len(scaled_scores)
 
-    scaled_scores_ten = list(map(lambda e: e['scaled_score'], player_events_ten))
+    scaled_scores_ten = [e['scaled_score'] for e in player_events_ten]
     avg_score_ten = sum(scaled_scores_ten)/len(scaled_scores_ten)
 
-    scores = list(map(lambda e: e['score'], player_events))
+    scores = [e['score'] for e in player_events]
     max_score = max(scores)
 
-    mmr_diffs = list(map(lambda e: e['change_mmr'], player_events))
-    mmr_diffs_ten = list(map(lambda e: e['change_mmr'], player_events_ten))
+    mmr_diffs = [e['change_mmr'] for e in player_events]
+    mmr_diffs_ten = [e['change_mmr'] for e in player_events_ten]
 
     max_gain = max(mmr_diffs)
     max_loss = min(mmr_diffs)
     mmr_change = sum(mmr_diffs)
     mmr_change_ten = sum(mmr_diffs_ten)
 
-    if (max_gain <= 0):
+    if max_gain <= 0:
         max_gain = None
-    if (max_loss >= 0):
+    if max_loss >= 0:
         max_loss = None
 
     avg_partner_score = get_avg_partner_score(player_events, type)
@@ -171,7 +204,7 @@ def calc_stats(name, filter_func, type):
         "Event \%": events_percentage*100,
         "Average": avg_score,
         "Partner Average": avg_partner_score,
-        "W-L": str(wins)+"-"+str(losses),
+        "W-L": f"{wins}-{losses}",
         "Win \%": win_percentage*100,
         "Gain/Loss": mmr_change,
         "Max Gain": max_gain,
@@ -179,7 +212,7 @@ def calc_stats(name, filter_func, type):
         "Top Score": max_score,
         "Average (Last 10)": avg_score_ten,
         "Partner Average (Last 10)": avg_partner_score_ten,
-        "W-L (Last 10)": str(wins_ten)+"-"+str(losses_ten),
+        "W-L (Last 10)": f"{wins_ten}-{losses_ten}",
         "Win \% (Last 10)": win_percentage_ten*100,
         "Gain/Loss (Last 10)": mmr_change_ten
     }
@@ -193,7 +226,7 @@ def calc_tier_stats(name, tier, type):
 def calc_format_stats(name, format, type):
     data =  calc_stats(name, lambda e: e['type'] == format, type)
 
-    if (format == 'FFA' and data != None):
+    if format == 'FFA' and data:
         del data["Partner Average"]
         del data["Partner Average (Last 10)"]
 
