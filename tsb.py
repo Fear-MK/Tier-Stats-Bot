@@ -268,7 +268,8 @@ async def predict(ctx, *, args):
         res = requests.get(url)
     except Exception:
         raise
-    await ctx.send(res.text)
+    embedVar=discord.Embed(title="Prediction Link", url=res.text, colour=discord.Color.blue())
+    await ctx.send(embed=embedVar)
 
 def create_embed(data, name, author):
     embed = discord.Embed(
