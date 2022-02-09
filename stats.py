@@ -248,3 +248,20 @@ def calc_partner_avg_ten(name, type):
     return {
         "Partner Average": data["Partner Average (Last 10)"],
     } if data else None
+
+def event_data_generation(player_ids, format):
+    p1,p2,p3,p4,p5,p6,p7,p8,p9,p10,p11,p12=player_ids #p=player
+    if format=="FFA":
+        event_data={"races":12,"format":"1","tier":"Tier 1","teams":[{"players":[{"player_id":p1,"score":12}]},{"players":[{"player_id":p2,"score":11}]},{"players":[{"player_id":p3,"score":10}]},{"players":[{"player_id":p4,"score":9}]},{"players":[{"player_id":p5,"score":8}]},{"players":[{"player_id":p6,"score":7}]},{"players":[{"player_id":p7,"score":6}]},{"players":[{"player_id":p8,"score":5}]},{"players":[{"player_id":p9,"score":4}]},{"players":[{"player_id":p10,"score":3}]},{"players":[{"player_id":p11,"score":2}]},{"players":[{"player_id":p12,"score":1}]}]}
+    elif format=="2v2":
+        event_data={"races":12,"format":"2","tier":"Tier 1","teams":[{"players":[{"player_id":p1,"score":12},{"player_id":p2,"score":11}]},{"players":[{"player_id":p3,"score":10},{"player_id":p4,"score":9}]},{"players":[{"player_id":p5,"score":8},{"player_id":p6,"score":7}]},{"players":[{"player_id":p7,"score":6},{"player_id":p8,"score":5}]},{"players":[{"player_id":p9,"score":4},{"player_id":p10,"score":3}]},{"players":[{"player_id":p11,"score":2},{"player_id":p12,"score":1}]}]}
+    elif format=="3v3":
+        event_data={"races":12,"format":"3","tier":"Tier 1","teams":[{"players":[{"player_id":p1,"score":12},{"player_id":p2,"score":11},{"player_id":p3,"score":10}]},{"players":[{"player_id":p4,"score":9},{"player_id":p5,"score":8},{"player_id":p6,"score":7}]},{"players":[{"player_id":p7,"score":6},{"player_id":p8,"score":5},{"player_id":p9,"score":4}]},{"players":[{"player_id":p10,"score":3},{"player_id":p11,"score":2},{"player_id":p12,"score":1}]}]}
+    elif format=="4v4":
+        event_data={"races":12,"format":"4","tier":"Tier 1","teams":[{"players":[{"player_id":p1,"score":12},{"player_id":p2,"score":11},{"player_id":p3,"score":10},{"player_id":p4,"score":9}]},{"players":[{"player_id":p5,"score":8},{"player_id":p6,"score":7},{"player_id":p7,"score":6},{"player_id":p8,"score":5}]},{"players":[{"player_id":p9,"score":4},{"player_id":p10,"score":3},{"player_id":p11,"score":2},{"player_id":p12,"score":1}]}]}
+    elif format=="6v6":
+        event_data={"races":12,"format":"6","tier":"Tier 1","teams":[{"players":[{"player_id":p1,"score":12},{"player_id":p2,"score":11},{"player_id":p3,"score":10},{"player_id":p4,"score":9},{"player_id":p5,"score":8},{"player_id":p6,"score":7}]},{"players":[{"player_id":p7,"score":6},{"player_id":p8,"score":5},{"player_id":p9,"score":4},{"player_id":p10,"score":3},{"player_id":p11,"score":2},{"player_id":p12,"score":1}]}]}
+    else:
+        print("Invalid")
+        event_data=""
+    return event_data

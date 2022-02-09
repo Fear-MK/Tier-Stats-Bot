@@ -67,3 +67,4 @@ EVENT_FORMAT_MAP = {
     "4v4": "4v4",
     "6v6": "6v6",
 }
+
