@@ -219,9 +219,11 @@ async def partneravg10(ctx, *args):
         await ctx.send(embed=create_embed(data, stats.player_name_map[formatted_name], author), delete_after=30)
 
 @bot.command() #Currently keeps typing after an error for around 3 seconds, don't know how to fix.
-async def predict(ctx, *, args):
+async def predict(ctx, *, args=None):
     usage = "Usage: `!predict <RT/CT> <event format> <players>`"
     example = "Example: `!predict ct 2 Marron, Thunda, Teovoni, brody, Luis, Sawyer, psycho, RoshiLBN, fruitz, jogn, James, Fear`"
+    if args==None:
+        send_messages(ctx, usage)
     try:
         args = args.split(", ")
         player_ids=["","","","","","","","","","","",""]
