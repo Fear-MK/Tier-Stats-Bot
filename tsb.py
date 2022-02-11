@@ -228,7 +228,7 @@ async def predict(ctx, *, args=None):
         args = args.split(", ")
         player_ids=["","","","","","","","","","","",""]
         if len(args) == 1:
-            await send_messages(ctx, "Invalid input, make sure the player names are separated by commas. ", usage, example)
+            await send_messages(ctx, "Invalid input - make sure the player names are separated by commas. ", usage, example)
             return
         first_args=args[0].split(" ", maxsplit=2) #Splitting player names and other arguments
         args.remove(args[0])
@@ -244,16 +244,17 @@ async def predict(ctx, *, args=None):
         else:
             await send_messages(ctx, 'Invalid type: use RT/CT', usage, example) #some form of error message subject to change
             return
-        if first_args[1] not in EVENT_FORMAT_MAP:
+        if first_args[1].lower() not in EVENT_FORMAT_MAP:
             await send_messages(ctx, 'Invalid format: use <ffa, 2v2, 3v3, 4v4, 6v6>', usage, example)
             return
-        team_format=EVENT_FORMAT_MAP[first_args[1]]
+        team_format=EVENT_FORMAT_MAP[first_args[1].lower()]
 
         r=requests.get(f'https://mkwlounge.gg/api/ladderplayer.php?ladder_id={ladder_id}&player_names={", ".join(args)}') #Requests all the player IDs
+        print(r.json())
         for player in r.json()["results"]: #sorts the player ids into order
             player_id = player["player_id"]
             for x in range(1, len(args)+1):
-                if args[x-1]==player["player_name"]:
+                if args[x-1].lower()==player["player_name"].lower():
                     player_ids[x-1:x]=[player_id]
 
         if "" in player_ids:
@@ -272,7 +273,11 @@ async def predict(ctx, *, args=None):
             res = requests.get(url)
         except Exception:
             raise
-        embedVar=discord.Embed(title="Prediction Link", url=res.text, colour=discord.Color.blue())
+        embedVar = discord.Embed(title="Prediction Link",url=res.text,colour=discord.Color.blue())
+        embedVar.set_author(
+            name='MMR/LR Prediction',
+            icon_url='https://www.mkwlounge.gg/images/logo.png'
+        )
         await ctx.send(embed=embedVar)
     except:
         await send_messages(ctx, "Invalid input. ", usage, example)
@@ -303,7 +308,7 @@ def create_embed(data, name, author):
 async def on_command_error(ctx, error):
     if isinstance(error, commands.CommandNotFound):
         return
-    ctx.send("Internal bot error. Please ping Forest (andrew#9232) if this persists.")
+    await ctx.send("Internal bot error. Please ping Forest (andrew#9232) if this persists.")
     raise error
 
 # Define variable key in secret.py
