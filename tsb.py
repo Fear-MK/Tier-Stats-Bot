@@ -237,9 +237,9 @@ async def predict(ctx, *, args=None):
         if len(args) != 12:
             await send_messages(ctx, "Invalid player amount - must have 12 players.",usage,example)
             return
-        if first_args[0] == "rt":
+        if first_args[0].lower() == "rt":
             ladder_id="1"
-        elif first_args[0] == "ct":
+        elif first_args[0].lower() == "ct":
             ladder_id="2"
         else:
             await send_messages(ctx, 'Invalid type: use RT/CT', usage, example) #some form of error message subject to change
