@@ -14,26 +14,31 @@ con.row_factory = sqlite3.Row
 
 # Fetch csv and save to file
 async def fetch_events_data(type = 'rt'):
-    data_url = f'https://www.mariokartboards.com/lounge/csv/events_{type}.csv'
+    ladder_id = 1 if type == 'rt' else 2
+    data_url = f'https://mkwlounge.gg/csv/events_ladder_id_{ladder_id}.csv'
     out_csv = f'events_{type}.csv'
 
     print("Calling wget")
-    subprocess.Popen(f"timeout -s KILL 120 wget -nv -O {'temp.csv'} {data_url}", shell=True)
-    await asyncio.sleep(125)
+    wget_string = f"timeout -s KILL 120 wget -nv -O {'temp.csv'} {data_url}"
+    process = subprocess.Popen(wget_string, shell=True)
+
+    for i in range(125):
+        if process.poll() is not None:
+            break
+        await asyncio.sleep(2.5)
+
+    rc = process.poll()
+    print("Return code: ", rc)
 
     if not os.path.exists("temp.csv"):
         raise FileNotFoundError()
 
-    if os.path.exists(out_csv):
-        if os.stat('temp.csv').st_size < os.stat(out_csv).st_size:
-            os.system("rm temp.csv")
-            raise FileNotFoundError()
+    if rc != 0:
+        os.system("rm temp.csv")
+        raise FileNotFoundError()
 
     os.system(f"mv temp.csv {out_csv}")
-    os.system("rm temp.csv")
     os.system("rm wget-log.*")
-
-    print("Done sleeping")
 
 # Load data from csv
 def load_events_data(type = 'rt'):
@@ -43,7 +48,9 @@ def load_events_data(type = 'rt'):
         reader = csv.reader(csv_file, delimiter=',')
         header = next(reader)
 
-        cols = header[0:16] + ['scaled_score']
+        cols = ['player_name', 'team', 'player_id', 'change_lr', 'multiplier', 'races', 'score',
+                'event_id', 'event_type', 'tier', 'player_id',
+                'scaled_score']
 
         cur.execute(f"DROP TABLE IF EXISTS {type};")
 
@@ -51,47 +58,42 @@ def load_events_data(type = 'rt'):
         CREATE TABLE {type} (
             name integer,
             team integer,
-            rank integer,
             player integer,
-            change_mmr integer,
+            change_lr integer,
             multiplier integer,
             races integer,
             score integer,
-            subbed integer,
-            subbee integer,
-            current_mmr integer,
-            updated_mmr integer,
-            warid integer,
-            type text,
+            event_id integer,
+            event_type text,
             tier text,
-            pid integer,
+            player_id integer,
             scaled_score double
         );
         """
 
         cur.execute(create_sql)
-        cur.execute(f"CREATE INDEX warid_{type} ON {type}(warid)")
+        cur.execute(f"CREATE INDEX event_id_{type} ON {type}(event_id)")
         cur.execute(f"CREATE INDEX name_{type} ON {type}(name)")
 
         for r in reader:
             event = dict(zip(header, r))
 
-            if event['type'] == 'Penalty' or event['type'] == 'Reward':
+            if event['event_type'] == 'Penalty' or event['event_type'] == 'Reward':
                 continue
 
-            formatted_name = format_name(event['name'])
-            player_name_map[formatted_name] = event['name']
+            formatted_name = format_name(event['player_name'])
+            player_name_map[formatted_name] = event['player_name']
 
-            event['name']=formatted_name
+            event['player_name']=formatted_name
             event['score'] = int(event['score'])
             event['races'] = int(event['races'])
 
             if event['races'] <= 0:
                 continue
 
-            event['change_mmr'] = int(event['change_mmr'])
+            event['change_lr'] = int(event['change_lr'])
             event['scaled_score'] = (event['score']/event['races'])*12
-            event['warid'] = int(event['warid'])
+            event['event_id'] = int(event['event_id'])
 
             values = [event[i] for i in cols]
 
@@ -110,8 +112,8 @@ def get_num_events(type):
     except:
         return 0
 
-def get_events_by_war_id(warid, type):
-    return fetch_sql(f"SELECT * from {type} WHERE warid={warid};")
+def get_events_by_war_id(event_id, type):
+    return fetch_sql(f"SELECT * from {type} WHERE event_id={event_id};")
 
 def get_events_by_name(name, type):
     return fetch_sql(f"SELECT * from {type} WHERE name=\"{name}\";")
@@ -119,7 +121,7 @@ def get_events_by_name(name, type):
 # Get partner score for one event
 def get_partner_score(event, type):
     scores = []
-    events = get_events_by_war_id(event['warid'], type)
+    events = get_events_by_war_id(event['event_id'], type)
 
     races = 0
     for partner in events:
@@ -159,17 +161,17 @@ def calc_stats(name, filter_func, type):
     if len(player_events) == 0:
         return {}
 
-    sorted_player_events = sorted(player_events, key=lambda e: e['warid'], reverse=True)
+    sorted_player_events = sorted(player_events, key=lambda e: e['event_id'], reverse=True)
     player_events_ten = sorted_player_events[0:min(len(sorted_player_events),10)]
 
     events_played = len(player_events)
     events_percentage = len(player_events)/total_events_played
 
-    wins = len([e for e in player_events if e['change_mmr'] > 0])
-    losses = len([e for e in player_events if e['change_mmr'] < 0])
+    wins = len([e for e in player_events if e['change_lr'] > 0])
+    losses = len([e for e in player_events if e['change_lr'] < 0])
 
-    wins_ten = len([e for e in player_events_ten if e['change_mmr'] > 0])
-    losses_ten = len([e for e in player_events_ten if e['change_mmr'] < 0])
+    wins_ten = len([e for e in player_events_ten if e['change_lr'] > 0])
+    losses_ten = len([e for e in player_events_ten if e['change_lr'] < 0])
 
     win_percentage = wins/len(player_events)
     win_percentage_ten = wins_ten/len(player_events_ten)
@@ -180,16 +182,16 @@ def calc_stats(name, filter_func, type):
     scaled_scores_ten = [e['scaled_score'] for e in player_events_ten]
     avg_score_ten = sum(scaled_scores_ten)/len(scaled_scores_ten)
 
-    scores = [e['score'] for e in player_events]
+    scores = [e['score'] for e in player_events if e['races'] <= 12]
     max_score = max(scores)
 
-    mmr_diffs = [e['change_mmr'] for e in player_events]
-    mmr_diffs_ten = [e['change_mmr'] for e in player_events_ten]
+    lr_diffs = [e['change_lr'] for e in player_events]
+    lr_diffs_ten = [e['change_lr'] for e in player_events_ten]
 
-    max_gain = max(mmr_diffs)
-    max_loss = min(mmr_diffs)
-    mmr_change = sum(mmr_diffs)
-    mmr_change_ten = sum(mmr_diffs_ten)
+    max_gain = max(lr_diffs)
+    max_loss = min(lr_diffs)
+    lr_change = sum(lr_diffs)
+    lr_change_ten = sum(lr_diffs_ten)
 
     if max_gain <= 0:
         max_gain = None
@@ -206,7 +208,7 @@ def calc_stats(name, filter_func, type):
         "Partner Average": avg_partner_score,
         "W-L": f"{wins}-{losses}",
         "Win \%": win_percentage*100,
-        "Gain/Loss": mmr_change,
+        "Gain/Loss": lr_change,
         "Max Gain": max_gain,
         "Max Loss": max_loss,
         "Top Score": max_score,
@@ -214,7 +216,7 @@ def calc_stats(name, filter_func, type):
         "Partner Average (Last 10)": avg_partner_score_ten,
         "W-L (Last 10)": f"{wins_ten}-{losses_ten}",
         "Win \% (Last 10)": win_percentage_ten*100,
-        "Gain/Loss (Last 10)": mmr_change_ten
+        "Gain/Loss (Last 10)": lr_change_ten
     }
 
 
@@ -224,7 +226,7 @@ def calc_tier_stats(name, tier, type):
 
 # Data for !formatstats
 def calc_format_stats(name, format, type):
-    data =  calc_stats(name, lambda e: e['type'] == format, type)
+    data =  calc_stats(name, lambda e: e['event_type'] == format, type)
 
     if format == 'FFA' and data:
         del data["Partner Average"]
