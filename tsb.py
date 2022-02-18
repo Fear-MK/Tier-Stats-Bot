@@ -3,8 +3,6 @@ import psutil
 import sqlite3
 import sys
 import traceback
-import requests
-import urllib
 
 import discord
 from discord.ext import commands, tasks
@@ -12,9 +10,10 @@ from discord.ext import commands, tasks
 import stats
 from common import *
 from secret import bot_key
+import requests
+import urllib
 
 bot = commands.Bot(command_prefix=('!', '^'), case_insensitive=True)
-
 
 # Fetch data loop
 @tasks.loop(hours=2)
@@ -28,7 +27,7 @@ async def update_data():
                 stats.load_events_data(type)
 
                 print("Data load successful")
-                return
+                break
             except:
                 traceback.print_exc()
             print("Data load failed")
@@ -80,9 +79,10 @@ async def on_ready():
         stats.load_events_data('ct')
     except:
         pass
+
     print(f'We have logged in as {bot.user}')
     print_memory.start()
-    # update_data.start()
+    update_data.start()
     check_db.start()
 
 
@@ -124,7 +124,7 @@ async def tierstats(ctx, *args):
 
     data = stats.calc_tier_stats(formatted_name, tier, type)
     if data is None:
-        await send_messages(ctx, "The selected player couldn't be found", usage)
+        await send_messages(ctx, "The selected player couldn't be found")
     else:
         author = f'Lounge {type.upper()} {tier} Stats'
         await ctx.send(embed=create_embed(data, stats.player_name_map[formatted_name], author), delete_after=30)
@@ -159,7 +159,7 @@ async def formatstats(ctx, *args):
 
     data = stats.calc_format_stats(formatted_name, format, type)
     if data is None:
-        await send_messages(ctx, "The selected player couldn't be found", usage)
+        await send_messages(ctx, "The selected player couldn't be found")
     else:
         author = f'Lounge {type.upper()} {format} Stats'
         await ctx.send(embed=create_embed(data, stats.player_name_map[formatted_name], author), delete_after=30)
@@ -186,7 +186,7 @@ async def partneravg(ctx, *args):
     formatted_name = format_name(name)
     data = stats.calc_partner_avg(formatted_name, type)
     if data is None:
-        await send_messages(ctx, "The selected player couldn't be found", usage)
+        await send_messages(ctx, "The selected player couldn't be found")
     else:
         author = f'Lounge {type.upper()} Partner Average'
         await ctx.send(embed=create_embed(data, stats.player_name_map[formatted_name], author), delete_after=30)
@@ -213,7 +213,7 @@ async def partneravg10(ctx, *args):
     formatted_name = format_name(name)
     data = stats.calc_partner_avg_ten(formatted_name, type)
     if data is None:
-        await send_messages(ctx, "The selected player couldn't be found", usage)
+        await send_messages(ctx, "The selected player couldn't be found")
     else:
         author = f'Lounge {type.upper()} Partner Average (Last 10)'
         await ctx.send(embed=create_embed(data, stats.player_name_map[formatted_name], author), delete_after=30)
@@ -223,26 +223,27 @@ async def predict(ctx, *, args=None):
     usage = "Usage: `!predict <RT/CT> <event format> <players>`"
     example = "Example: `!predict ct 2 Marron, Thunda, Teovoni, brody, Luis, Sawyer, psycho, RoshiLBN, fruitz, jogn, James, Fear`"
     if args==None:
-        send_messages(ctx, usage)
+        await send_messages(ctx, usage)
     try:
         args = args.split(", ")
-        player_ids=["","","","","","","","","","","",""]
+        player_ids = ["","","","","","","","","","","",""]
         if len(args) == 1:
             await send_messages(ctx, "Invalid input - make sure the player names are separated by commas. ", usage, example)
             return
-        first_args=args[0].split(" ", maxsplit=2) #Splitting player names and other arguments
+        first_args = args[0].split(" ",maxsplit=2)  # Splitting player names and other arguments
         args.remove(args[0])
-        args.insert(0, first_args[2])
-        first_args.remove(first_args[2]) #there is definetly a more effecient way to do this
+        args.insert(0,first_args[2])
+        first_args.remove(first_args[2])  # there is definetly a more effecient way to do this
         if len(args) != 12:
-            await send_messages(ctx, "Invalid player amount - must have 12 players.",usage,example)
+            await send_messages(ctx,"Invalid player amount - must have 12 players.",usage,example)
             return
         if first_args[0].lower() == "rt":
             ladder_id="1"
         elif first_args[0].lower() == "ct":
             ladder_id="2"
         else:
-            await send_messages(ctx, 'Invalid type: use RT/CT', usage, example) #some form of error message subject to change
+            await send_messages(ctx,'Invalid type: use RT/CT',usage,
+                                example)  # some form of error message subject to change
             return
         if first_args[1].lower() not in EVENT_FORMAT_MAP:
             await send_messages(ctx, 'Invalid format: use <ffa, 2v2, 3v3, 4v4, 6v6>', usage, example)
@@ -250,7 +251,7 @@ async def predict(ctx, *, args=None):
         team_format=EVENT_FORMAT_MAP[first_args[1].lower()]
 
         r=requests.get(f'https://mkwlounge.gg/api/ladderplayer.php?ladder_id={ladder_id}&player_names={", ".join(args)}') #Requests all the player IDs
-        print(r.json())
+        #print(r.json())
         for player in r.json()["results"]: #sorts the player ids into order
             player_id = player["player_id"]
             for x in range(1, len(args)+1):
@@ -258,15 +259,18 @@ async def predict(ctx, *, args=None):
                     player_ids[x-1:x]=[player_id]
 
         if "" in player_ids:
-            await send_messages(ctx, "I could not find one of those players in the database make sure the name is correctly capitalized (cannot predict placements). ", usage)
+            await send_messages(ctx,
+                                "I could not find one of those players in the database make sure the name is correctly capitalized (cannot predict placements). ",
+                                usage)
             return
-        
-        s_quote="'"
-        d_quote='"' # I didnt know how to replace single quotations with double quotations and this is the solution I came up with
 
-        event_data = stats.event_data_generation(player_ids, team_format)
+        s_quote = "'"
+        d_quote = '"'  # I didnt know how to replace single quotations with double quotations and this is the solution I came up with
 
-        link = "https://www.mkwlounge.gg/ladder/tabler.php?ladder_id="+ladder_id+"&event_data="+str(event_data).replace(s_quote, d_quote)
+        event_data = stats.event_data_generation(player_ids,team_format)
+
+        link = "https://www.mkwlounge.gg/ladder/tabler.php?ladder_id=" + ladder_id + "&event_data=" + str(
+            event_data).replace(s_quote,d_quote)
         URL = "http://tinyurl.com/api-create.php"
         try:
             url = URL + "?" + urllib.parse.urlencode({"url": link})
@@ -280,9 +284,38 @@ async def predict(ctx, *, args=None):
         )
         await ctx.send(embed=embedVar)
     except:
-        await send_messages(ctx, "Invalid input. ", usage, example)
+        await send_messages(ctx,"Invalid input. ",usage,example)
         return
 
+@bot.command()
+async def playerpage(ctx, ladder, *player):
+    player=list(player)
+    usage = "Usage: `!playerpage <RT/CT> <PLAYER>`"
+    example = "Example: `!playerpage ct Fear`"
+
+    if ladder.lower() == "rt":
+        ladder_id="1"
+    elif ladder.lower() == "ct":
+        ladder_id="2"
+    else:
+        await send_messages(ctx,'Invalid type: use RT/CT',usage,example)  # some form of error message subject to change
+        return
+    
+    player = " ".join(player).title()
+    r=requests.get(f'https://mkwlounge.gg/api/ladderplayer.php?ladder_id={ladder_id}&player_name={player}')
+    if r.json()["status"]=="failed":
+        if r.json()["reason"] == "invalid player name":
+            await send_messages(ctx,f"`{player}` is an invalid player name.",usage,example)
+        else:
+            await ctx.send("An unknown error invloving the Lounge API occurred. If the problem persists, contact Fear#1616.")
+        return
+    embedVar = discord.Embed(title=f"{player}'s Player Page",url=f'https://www.mkwlounge.gg/ladder/player.php?player_id={r.json()["results"][0]["player_id"]}&ladder_id={ladder_id}',colour=discord.Color.blue())
+    embedVar.set_author(
+        name='Lounge',
+        icon_url='https://www.mkwlounge.gg/images/logo.png'
+    )
+    await ctx.send(embed=embedVar)
+    
 def create_embed(data, name, author):
     embed = discord.Embed(
         title=name,
@@ -290,7 +323,7 @@ def create_embed(data, name, author):
     )
     embed.set_author(
         name=author,
-        icon_url='https://www.mariokartboards.com/lounge/images/logo.png'
+        icon_url='https://www.mkwlounge.gg/images/logo.png'
     )
 
     if len(data) == 0:
