@@ -224,74 +224,84 @@ async def predict(ctx, *, args=None):
     example = "Example: `!predict ct 2 Marron, Thunda, Teovoni, brody, Luis, Sawyer, psycho, RoshiLBN, fruitz, jogn, James, Fear`"
     if args==None:
         await send_messages(ctx, usage)
-    try:
-        args = args.split(", ")
-        player_ids = ["","","","","","","","","","","",""]
-        if len(args) == 1:
-            await send_messages(ctx, "Invalid input - make sure the player names are separated by commas. ", usage, example)
-            return
-        first_args = args[0].split(" ",maxsplit=2)  # Splitting player names and other arguments
-        args.remove(args[0])
-        args.insert(0,first_args[2])
-        first_args.remove(first_args[2])  # there is definetly a more effecient way to do this
-        if len(args) != 12:
-            await send_messages(ctx,"Invalid player amount - must have 12 players.",usage,example)
-            return
-        if first_args[0].lower() == "rt":
-            ladder_id="1"
-        elif first_args[0].lower() == "ct":
-            ladder_id="2"
-        else:
-            await send_messages(ctx,'Invalid type: use RT/CT',usage,
-                                example)  # some form of error message subject to change
-            return
-        if first_args[1].lower() not in EVENT_FORMAT_MAP:
-            await send_messages(ctx, 'Invalid format: use <ffa, 2v2, 3v3, 4v4, 6v6>', usage, example)
-            return
-        team_format=EVENT_FORMAT_MAP[first_args[1].lower()]
-
-        r=requests.get(f'https://mkwlounge.gg/api/ladderplayer.php?ladder_id={ladder_id}&player_names={", ".join(args)}') #Requests all the player IDs
-        #print(r.json())
-        for player in r.json()["results"]: #sorts the player ids into order
-            player_id = player["player_id"]
-            for x in range(1, len(args)+1):
-                if args[x-1].lower()==player["player_name"].lower():
-                    player_ids[x-1:x]=[player_id]
-
-        if "" in player_ids:
-            await send_messages(ctx,
-                                "I could not find one of those players in the database make sure the name is correctly capitalized (cannot predict placements). ",
-                                usage)
-            return
-
-        s_quote = "'"
-        d_quote = '"'  # I didnt know how to replace single quotations with double quotations and this is the solution I came up with
-
-        event_data = stats.event_data_generation(player_ids,team_format)
-
-        link = "https://www.mkwlounge.gg/ladder/tabler.php?ladder_id=" + ladder_id + "&event_data=" + str(
-            event_data).replace(s_quote,d_quote)
-        URL = "http://tinyurl.com/api-create.php"
-        try:
-            url = URL + "?" + urllib.parse.urlencode({"url": link})
-            res = requests.get(url)
-        except Exception:
-            raise
-        embedVar = discord.Embed(title="Prediction Link",url=res.text,colour=discord.Color.blue())
-        embedVar.set_author(
-            name='MMR/LR Prediction',
-            icon_url='https://www.mkwlounge.gg/images/logo.png'
-        )
-        await ctx.send(embed=embedVar)
-    except:
-        await send_messages(ctx,"Invalid input. ",usage,example)
+    args = args.split(", ")
+    player_ids = ["","","","","","","","","","","",""]
+    if len(args) == 1:
+        await send_messages(ctx, "Invalid input - make sure the player names are separated by commas. ", usage, example)
         return
+    first_args = args[0].split(" ",maxsplit=2)  # Splitting player names and other arguments
+    args.remove(args[0])
+    args.insert(0,first_args[2])
+    first_args.remove(first_args[2])  # there is definetly a more effecient way to do this
+    if len(args) != 12:
+        await send_messages(ctx,"Invalid player amount - must have 12 players.",usage,example)
+        return
+    if first_args[0].lower() == "rt":
+        ladder_id="1"
+    elif first_args[0].lower() == "ct":
+        ladder_id="2"
+    else:
+        await send_messages(ctx,'Invalid type: use RT/CT',usage,
+                            example)  # some form of error message subject to change
+        return
+    if first_args[1].lower() not in EVENT_FORMAT_MAP:
+        await send_messages(ctx, 'Invalid format: use <ffa, 2v2, 3v3, 4v4, 6v6>', usage, example)
+        return
+    team_format=EVENT_FORMAT_MAP[first_args[1].lower()]
+
+    r=requests.get(f'https://mkwlounge.gg/api/ladderplayer.php?ladder_id={ladder_id}&player_names={", ".join(args)}') #Requests all the player IDs
+    player_names=[]
+    for player in r.json()["results"]: #sorts the player ids into order
+        player_names.append(player["player_name"].lower())
+        player_id = player["player_id"]
+        for x in range(1, len(args)+1):
+            if args[x-1].lower()==player["player_name"].lower():
+                player_ids[x-1:x]=[player_id]
+    for x in player_ids:
+        if x == "":
+            player_ids.remove(x)
+    if len(player_ids)!=12:
+        invalid_names=[]
+        for name in args:
+            if name.lower() in player_names:
+                pass
+            else:
+                invalid_names.append(name)
+        if len(invalid_names) > 2:                
+            await send_messages(ctx,f"`{', '.join(invalid_names[:-1]) + ' and ' + invalid_names[-1]}` are invalid names. Double check spelling.",usage,example)
+        elif len(invalid_names) == 2:
+            await send_messages(ctx,f"`{' and '.join(invalid_names)}` are invalid names. Double check spelling.")
+        else:
+            await send_messages(ctx,f"`{', '.join(invalid_names)}` is an invalid name. Double check spelling.",usage,example)
+        return
+
+    s_quote = "'"
+    d_quote = '"'  # I didnt know how to replace single quotations with double quotations and this is the solution I came up with
+
+    event_data = stats.event_data_generation(player_ids,team_format)
+
+    link = "https://www.mkwlounge.gg/ladder/tabler.php?ladder_id=" + ladder_id + "&event_data=" + str(
+        event_data).replace(s_quote,d_quote)
+    URL = "http://tinyurl.com/api-create.php"
+    try:
+        url = URL + "?" + urllib.parse.urlencode({"url": link})
+        res = requests.get(url)
+    except Exception:
+        raise
+    embedVar = discord.Embed(title="Prediction Link",url=res.text,colour=discord.Color.blue())
+    embedVar.set_author(
+        name='MMR/LR Prediction',
+        icon_url='https://www.mkwlounge.gg/images/logo.png'
+    )
+    await ctx.send(embed=embedVar)
+        # await send_messages(ctx,"Invalid input. ",usage,example)
+        # return
 
 @bot.command()
 async def playerpage(ctx, ladder, *player):
     player=list(player)
     usage = "Usage: `!playerpage <RT/CT> <PLAYER>`"
-    example = "Example: `!playerpage ct Fear`"
+    example = "Example: `!playerpage rt Fear`"
 
     if ladder.lower() == "rt":
         ladder_id="1"
