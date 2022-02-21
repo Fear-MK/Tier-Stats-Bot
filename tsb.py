@@ -311,7 +311,7 @@ async def playerpage(ctx, ladder, *player):
         await send_messages(ctx,'Invalid type: use RT/CT',usage,example)  # some form of error message subject to change
         return
     
-    player = " ".join(player).title()
+    player = " ".join(player)
     r=requests.get(f'https://mkwlounge.gg/api/ladderplayer.php?ladder_id={ladder_id}&player_name={player}')
     if r.json()["status"]=="failed":
         if r.json()["reason"] == "invalid player name":
@@ -319,7 +319,8 @@ async def playerpage(ctx, ladder, *player):
         else:
             await ctx.send("An unknown error invloving the Lounge API occurred. If the problem persists, contact Fear#1616.")
         return
-    embedVar = discord.Embed(title=f"{player}'s Player Page",url=f'https://www.mkwlounge.gg/ladder/player.php?player_id={r.json()["results"][0]["player_id"]}&ladder_id={ladder_id}',colour=discord.Color.blue())
+    player_name=r.json()["results"][0]["player_name"]
+    embedVar = discord.Embed(title=f"{player_name}'s Player Page",url=f'https://www.mkwlounge.gg/ladder/player.php?player_id={r.json()["results"][0]["player_id"]}&ladder_id={ladder_id}',colour=discord.Color.blue())
     embedVar.set_author(
         name='Lounge',
         icon_url='https://www.mkwlounge.gg/images/logo.png'
