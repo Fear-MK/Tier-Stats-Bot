@@ -298,10 +298,15 @@ async def predict(ctx, *, args=None):
         # return
 
 @bot.command()
-async def playerpage(ctx, ladder, *player):
-    player=list(player)
+async def playerpage(ctx, *args):
     usage = "Usage: `!playerpage <RT/CT> <PLAYER>`"
     example = "Example: `!playerpage rt Fear`"
+    ladder=args[0]
+
+    if len(args) >= 2:
+        player = ' '.join(args[1:])
+    else:
+        player = ctx.author.display_name
 
     if ladder.lower() == "rt":
         ladder_id="1"
